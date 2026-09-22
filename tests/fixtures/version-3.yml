@@ -1,0 +1,17 @@
+clean:
+  rows: 27009
+  columns: 46
+  unique_ids: 27009
+  units_sum: 2053677
+geocoded:
+  rows: 26886
+  columns: 45
+  unique_ids: 26886
+  epsg: 31983
+  units_sum: 1991008
+final:
+  rows: 11735
+  columns: 48
+  unique_development_ids: 11734
+  epsg: 31983
+  units_sum: 914401

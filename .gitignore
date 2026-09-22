@@ -1,5 +1,48 @@
+# R session files
 .Rproj.user/
 .Rhistory
+.Rapp.history
 .RData
+.RDataTmp
+.Ruserdata
+
+# Environment variables
+.Renviron
+.env
+
+# OS files
 .DS_Store
-__MACOSX/
+Thumbs.db
+
+# Data: raw is fetched by the pipeline; processed is published to Dataverse
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/benchmark/
+
+# Generated publication files
+outputs/*
+!outputs/.gitkeep
+
+# targets
+_targets/
+
+# renv library
+renv/library/
+renv/staging/
+renv/sandbox/
+
+# R CMD build/check
+*.tar.gz
+*.Rcheck/
+
+# knitr/rmarkdown
+*_cache/
+/cache/
+*.utf8.md
+*.knit.md
+
+# Local scratch
+*.notes
+scratch/

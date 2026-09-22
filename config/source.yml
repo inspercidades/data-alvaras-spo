@@ -1,0 +1,3 @@
+# Set url to a dated municipal archive before creating a release.
+url: null
+max_days: 365

@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "Please cite the dataset when using this repository."
+title: "Data pipeline for building permits for new developments in São Paulo"
+type: software
+repository-code: "https://github.com/inspercidades/data-alvaras-spo"
+license: MIT
+authors:
+  - family-names: "Costa"
+    given-names: "Adriano Borges"
+  - family-names: "Guizzardi"
+    given-names: "Henrique"
+  - family-names: "Reginatto"
+    given-names: "Vinícius"
+preferred-citation:
+  type: dataset
+  title: "Alvarás de Novas Edificações, São Paulo [2010-2024]"
+  authors:
+    - family-names: "Costa"
+      given-names: "Adriano Borges"
+    - family-names: "Guizzardi"
+      given-names: "Henrique"
+  year: 2025
+  version: "3"
+  doi: "10.60873/FK2/FPCIDI"
