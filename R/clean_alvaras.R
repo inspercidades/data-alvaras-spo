@@ -23,7 +23,7 @@ import::from(
   ungroup
 )
 import::from(forcats, as_factor)
-import::from(lubridate, as_date, month, year, ymd)
+import::from(lubridate, NA_Date_, as_date, month, year, ymd)
 import::from(purrr, map_chr, reduce)
 import::from(
   stringr,
