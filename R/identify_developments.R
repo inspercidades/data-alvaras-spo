@@ -1,14 +1,17 @@
 # Identify developments ----
+#
+# Groups permits that belong to the same development and summarises each
+# development. The rules follow `original/3_alvaras_empreendimentos_pde.R`;
+# the regression tests check that the output reproduces version 3. Rules
+# marked "Questão para os autores" are kept as in version 3 and listed in
+# `validation/README.md`.
 
 import::from(
   dplyr,
   across,
   arrange,
-  bind_cols,
   bind_rows,
   case_when,
-  count,
-  dense_rank,
   desc,
   filter,
   first,
@@ -19,21 +22,54 @@ import::from(
   mutate,
   n,
   n_distinct,
-  rename,
-  row_number,
   select,
-  slice_max,
-  starts_with,
   summarise,
-  summarize,
-  ungroup,
   where
 )
-import::from(lubridate, days, interval, year)
+import::from(lubridate, year)
 import::from(purrr, map_chr)
-import::from(sf, st_drop_geometry, st_sf)
-import::from(stringr, str_detect, str_extract, str_split, str_trim)
-import::from(tidyr, pivot_longer)
+import::from(stringr, str_detect, str_split, str_trim)
+
+uso_residencial <- "R2V|R202|R302|R2H|R301|R302|R303|(?<!N)R1|(?<!N)R2"
+uso_nao_residencial <- "NR|C1|C2|C3|S1|S2|S3|E1|E2|E3|E4"
+
+identify_developments <- function(geo_alvaras, dist_max = 100) {
+  permits <- sf::st_sf(geo_alvaras, crs = 31983)
+  permits <- mutate(permits, sql_incra_composto = combine_sql(sql_incra))
+
+  match_pairs <- classify_match_pairs(permits, dist_max)
+  permits <- assign_developments(permits, match_pairs)
+
+  # Summaries carry a row index and recover the point at the end.
+  points <- sf::st_geometry(permits)
+  permits <- sf::st_drop_geometry(permits)
+  permits <- mutate(permits, ponto = seq_len(n()))
+
+  permits <- flag_parcelamento(permits)
+  developments <- summarise_developments(permits)
+
+  developments <- filter(developments, ind_aprovacao & ind_execucao)
+  developments <- filter(developments, is.na(n_unidades) | n_unidades > 5)
+  developments <- mutate(developments, geometry = points[ponto])
+  developments <- select(
+    developments,
+    -c(ponto, sql_incra_composto, sql_incra_lista)
+  )
+  developments <- sf::st_sf(developments, sf_column_name = "geometry")
+  return(developments)
+}
+
+# Match permits ----
+
+combine_sql <- function(sql_incra) {
+  # Permits may list the same SQLs in a different order.
+  sql_tokens <- str_split(sql_incra, ",")
+  sql_incra_composto <- map_chr(
+    sql_tokens,
+    \(tokens) paste(sort(str_trim(tokens), method = "radix"), collapse = ",")
+  )
+  return(sql_incra_composto)
+}
 
 pair_combinations <- function(indices) {
   indices <- sort(unique(indices))
@@ -45,8 +81,10 @@ pair_combinations <- function(indices) {
 }
 
 shared_sql_pairs <- function(sql_values) {
-  sql_tokens <- stringr::str_split(sql_values, ",")
-  sql_tokens <- lapply(sql_tokens, stringr::str_trim)
+  sql_tokens <- str_split(sql_values, ",")
+  sql_tokens <- lapply(sql_tokens, str_trim)
+  # Questão para os autores: permits without an SQL all share this token, so
+  # the matcher treats them as sharing one lot.
   sql_tokens <- lapply(sql_tokens, function(tokens) {
     tokens[is.na(tokens) | tokens == ""] <- "__MISSING_SQL__"
     return(unique(tokens))
@@ -55,7 +93,7 @@ shared_sql_pairs <- function(sql_values) {
   permit_index <- rep(seq_along(sql_tokens), lengths(sql_tokens))
   token_index <- split(permit_index, unlist(sql_tokens, use.names = FALSE))
   pairs <- lapply(token_index, pair_combinations)
-  pairs <- dplyr::bind_rows(pairs)
+  pairs <- bind_rows(pairs)
   pairs <- dplyr::distinct(pairs, left, right)
   return(pairs)
 }
@@ -69,11 +107,20 @@ nearby_pairs <- function(geo_permits, distance_threshold) {
   left <- rep(seq_along(neighbors), lengths(neighbors))
   right <- unlist(neighbors, use.names = FALSE)
   pairs <- data.frame(left = left, right = right)
-  pairs <- dplyr::filter(pairs, left < right)
+  pairs <- filter(pairs, left < right)
   pairs <- dplyr::distinct(pairs, left, right)
   return(pairs)
 }
 
+# Two permits match when they share an SQL, share a land area, and lie
+# within `distance_threshold` metres. Match types:
+#   1: perfect (all three)
+#   2: SQL and land area
+#   3: SQL and distance
+#   4: land area and distance
+#   5: SQL only
+# Partial matches (2-4) become perfect when the building area or the number of
+# units is also equal.
 classify_match_pairs <- function(geo_permits, distance_threshold) {
   sql_pairs <- shared_sql_pairs(geo_permits$sql_incra_composto)
   sql_pairs$shared_sql <- rep(TRUE, nrow(sql_pairs))
@@ -90,29 +137,25 @@ classify_match_pairs <- function(geo_permits, distance_threshold) {
 
   left <- candidates$left
   right <- candidates$right
-  same_land_area <- !is.na(geo_permits$area_do_terreno[left]) &
-    !is.na(geo_permits$area_do_terreno[right]) &
-    geo_permits$area_do_terreno[left] == geo_permits$area_do_terreno[right]
+  same_value <- function(x) {
+    return(!is.na(x[left]) & !is.na(x[right]) & x[left] == x[right])
+  }
+  same_land_area <- same_value(geo_permits$area_do_terreno)
 
-  candidates$match_type <- dplyr::case_when(
+  candidates$match_type <- case_when(
     candidates$shared_sql & candidates$nearby & same_land_area ~ 1L,
     candidates$shared_sql & !candidates$nearby & same_land_area ~ 2L,
     candidates$shared_sql & candidates$nearby & !same_land_area ~ 3L,
     !candidates$shared_sql & candidates$nearby & same_land_area ~ 4L,
     candidates$shared_sql & !candidates$nearby & !same_land_area ~ 5L,
-    TRUE ~ 0L
+    .default = 0L
   )
 
   partial <- candidates$match_type %in% 2:4
-  same_building_area <- !is.na(geo_permits$area_da_construcao[left]) &
-    !is.na(geo_permits$area_da_construcao[right]) &
-    geo_permits$area_da_construcao[left] ==
-      geo_permits$area_da_construcao[right]
-  same_units <- !is.na(geo_permits$n_unidades[left]) &
-    !is.na(geo_permits$n_unidades[right]) &
-    geo_permits$n_unidades[left] == geo_permits$n_unidades[right]
-  candidates$match_type[partial & (same_building_area | same_units)] <- 1L
-  candidates <- dplyr::filter(candidates, match_type > 0)
+  promoted <- same_value(geo_permits$area_da_construcao) |
+    same_value(geo_permits$n_unidades)
+  candidates$match_type[partial & promoted] <- 1L
+  candidates <- filter(candidates, match_type > 0)
   return(candidates)
 }
 
@@ -133,745 +176,322 @@ component_ids <- function(match_pairs, number_of_permits) {
   return(ids)
 }
 
-identify_developments <- function(geo_alvaras, dist_max = 100) {
-  geo_alvaras <- sf::st_sf(geo_alvaras, crs = 31983)
+# Each permit joins one development. A perfect-match group takes priority,
+# then a partial-match group (lowest type first), then an SQL-only group.
+# Permits in no group form a development of their own.
+assign_developments <- function(permits, match_pairs) {
+  components <- as.matrix(component_ids(match_pairs, nrow(permits)))
+  in_group <- apply(components, 2, \(id) tabulate(id)[id] > 1)
+  row <- seq_len(nrow(permits))
 
-  # 2. Observações com mais de um SQL --------------------------------------------------------------
+  # Questão para os autores: the original comment says a permit in several
+  # partial-match groups joins the one with more units. The code compares the
+  # permit's own units across its groups, which always tie, so the permit
+  # joins its lowest partial type.
+  tipo_final <- case_when(
+    in_group[, 1] ~ 1L,
+    in_group[, 2] ~ 2L,
+    in_group[, 3] ~ 3L,
+    in_group[, 4] ~ 4L,
+    in_group[, 5] ~ 5L
+  )
+  grupo <- components[cbind(row, tipo_final)]
+  id_empreendimento <- case_when(
+    tipo_final == 1 ~ paste0("P_", grupo),
+    tipo_final %in% 2:4 ~ paste0("M", tipo_final, "_", grupo),
+    tipo_final == 5 ~ paste0("U_", grupo),
+    .default = paste0("S_", row)
+  )
 
-  # Precisamos identificar as observações com mais de um SQL que possuem os mesmos SQLs, mas que podem não estar na mesma ordem
-  geo_alvaras <- geo_alvaras |>
-    mutate(
-      sql_incra_composto = sql_incra |>
-        str_split(",") |>
-        lapply(function(x) sort(str_trim(x))) |>
-        sapply(paste, collapse = ",")
+  permits <- mutate(
+    permits,
+    id_empreendimento_num = match(
+      id_empreendimento,
+      sort(unique(id_empreendimento), method = "radix")
+    ),
+    tipo_match = case_when(
+      tipo_final == 1 ~ "perfeito",
+      tipo_final %in% 2:4 ~ paste0("parcial_", tipo_final),
+      tipo_final == 5 ~ "único",
+      .default = "sem match"
     )
+  )
+  return(permits)
+}
 
-  # 3. Identifica empreendimentos --------------------------------------------------------------
+# Flag parcelamentos ----
+#
+# A lot (SQL) is a parcelamento when it was split into sub-lots with their own
+# permits. Rules validated in Insper/Abrainc meetings, Nov-Dec 2022.
 
-  # Precisamos criar um indicador de empreendimento. Para isso, utilizaremos 3 variáveis: SQL,
-  # área do terreno e distância entre os pontos. Definimos um MATCH PERFEITO entre duas observações
-  # se houver igualdade (ou inclusão) entre os SQLs, igualdade entre as áreas e com a distância entre
-  # os dois pontos sendo menor ou igual a um valor pré-definido. Para os MATCHES PARCIAIS, podemos
-  # ter casos distintos. São eles:
-  # 1) SQLs e área do terreno: depende da distância limite, mas deve se tratar de um empreendimento com muitos lotes
-  # 2) SQLs e distância: necessário comparar magnitude da área e, talvez, outras variáveis
-  # 3) Área do terreno e distância: muito provavelmente é o mesmo empreendimento, com mais de um lote
-  # Gostaríamos de transformar matches parciais em matches perfeitos. Para isso, criamos a seguinte
-  # árvore de decisão:
-  # a. Caso haja um match parcial entre duas observações, comparamos a área da construção. Se for igual,
-  # definimos como match perfeito;
-  # b. Se a área da construção não for igual, comparamos o número de unidades; se for igual, definimos
-  # como match perfeito. Se não, continua como match parcial.
-  # Além dos matches perfeitos e parciais, vamos definir os MATCHES ÚNICOS, baseados apenas no SQL.
-  # Por fim, as observações SEM MATCH serão definidas como as em que não houve nenhum dos três tipos.
+flag_parcelamento <- function(permits) {
+  lots <- filter(permits, !ind_sql_incra_null)
+  lots <- mutate(
+    lots,
+    n_aprovacao = sum(
+      ind_aprovacao & !ind_correcao & ind_edificacao_nova,
+      na.rm = TRUE
+    ),
+    n_execucao = sum(
+      ind_execucao & !ind_correcao & ind_edificacao_nova,
+      na.rm = TRUE
+    ),
+    .by = sql_incra_composto
+  )
+  lots <- mutate(
+    lots,
+    n_areas_terreno = n_distinct(area_do_terreno[
+      !is.na(area_do_terreno) &
+        (ind_edificacao_nova | ind_loteamento | ind_conclusao)
+    ]),
+    .by = c(sql_incra_composto, descricao_tipo)
+  )
+  lots <- filter(lots, any(ind_edificacao_nova), .by = sql_incra_composto)
 
-  amostra <- geo_alvaras
-  match_pairs <- classify_match_pairs(amostra, dist_max)
-  empreendimento_ids <- component_ids(match_pairs, nrow(amostra))
-  amostra <- bind_cols(amostra, empreendimento_ids)
-
-  # ---------------------------------------------
-  # Gera um único ID de empreendimento
-
-  # 1. Conta o tamanho de cada componente para cada tipo de match
-  tamanhos <- bind_rows(
-    amostra |>
-      st_drop_geometry() |>
-      mutate(tipo = 1, empreendimento_id = empreendimento_id_match_1) |>
-      count(empreendimento_id, tipo, name = "tam"),
-    amostra |>
-      st_drop_geometry() |>
-      mutate(tipo = 2, empreendimento_id = empreendimento_id_match_2) |>
-      count(empreendimento_id, tipo, name = "tam"),
-    amostra |>
-      st_drop_geometry() |>
-      mutate(tipo = 3, empreendimento_id = empreendimento_id_match_3) |>
-      count(empreendimento_id, tipo, name = "tam"),
-    amostra |>
-      st_drop_geometry() |>
-      mutate(tipo = 4, empreendimento_id = empreendimento_id_match_4) |>
-      count(empreendimento_id, tipo, name = "tam"),
-    amostra |>
-      st_drop_geometry() |>
-      mutate(tipo = 5, empreendimento_id = empreendimento_id_match_5) |>
-      count(empreendimento_id, tipo, name = "tam")
+  # Questão para os autores: the original counts plano integrado permits with
+  # `length(which(...) & ind_correcao == FALSE)`, which ignores the correction
+  # filter. It has no effect on version 3.
+  lots <- mutate(
+    lots,
+    tem_loteamento = any(descricao_tipo == "PLANO INTEGRADO"),
+    # Case 1: plano integrado with several land areas and approvals.
+    ind_caso_1 = tem_loteamento &
+      n_areas_terreno > 1 &
+      (n_aprovacao > 1 | n_execucao > 1),
+    # Case 2: several completion permits and several land areas.
+    ind_caso_2 = sum(ind_conclusao & !ind_correcao, na.rm = TRUE) > 1 &
+      n_areas_terreno > 1,
+    .by = sql_incra_composto
+  )
+  # Case 3: several addresses among permits of the same type.
+  lots <- mutate(
+    lots,
+    ind_caso_3 = n_distinct(endereco[
+      (ind_edificacao_nova | tem_loteamento | ind_conclusao) &
+        !ind_correcao
+    ]) >
+      1 &
+      n_areas_terreno > 1,
+    .by = c(sql_incra_composto, descricao_tipo)
+  )
+  lots <- mutate(
+    lots,
+    ind_parcelamento = any(ind_edificacao_nova) &
+      (any(ind_caso_1) | any(ind_caso_2) | any(ind_caso_3)),
+    .by = sql_incra_composto
   )
 
-  # 2. Prepara os dados da amostra com IDs e tamanhos
-  # Transforma em dataframe normal
-  amostra_df <- amostra |> st_drop_geometry()
+  # Questão para os autores: the original overwrote `ind_loteamento` with the
+  # lot-level flag and then joined on every shared column. Permits whose flag
+  # changed found no match and were left out, as were permits without an SQL.
+  lots <- filter(lots, ind_loteamento == tem_loteamento)
+  flags <- select(lots, id, ind_parcelamento)
+  permits <- left_join(permits, flags, by = "id")
 
-  # Agora faz as manipulações
-  amostra_ext <- amostra_df |>
-    mutate(row_id = row_number(), n_unidades = n_unidades) |>
-    pivot_longer(
-      cols = starts_with("empreendimento_id_match_"),
-      names_to = "tipo",
-      values_to = "empreendimento_id"
-    ) |>
-    mutate(tipo = as.numeric(str_extract(tipo, "\\d+")))
-  amostra_ext <- left_join(
-    amostra_ext,
-    tamanhos,
-    by = c("empreendimento_id", "tipo")
+  excluded <- sum(is.na(permits$ind_parcelamento))
+  cli::cli_inform(
+    "{excluded} permit{?s} left out of the developments by the version 3 parcelamento rule."
   )
+  return(permits)
+}
 
-  # 3. Para matches parciais, escolhe o empreendimento com mais unidades
-  match_parcial <- amostra_ext |>
-    filter(tipo %in% 2:4, tam > 1) |>
-    group_by(row_id) |>
-    slice_max(order_by = n_unidades, with_ties = FALSE) |>
-    ungroup()
+# Summarise developments ----
 
-  # 4. Define o ID final e o tipo de match com a prioridade
-  id_final <- amostra_ext |>
-    filter(
-      (tipo == 1 & tam > 1) |
-        (tipo %in% 2:4 & tam > 1) |
-        (tipo == 5 & tam > 1)
-    ) |>
-    group_by(row_id) |>
-    summarise(
-      tipo_final = case_when(
-        any(tipo == 1) ~ 1,
-        any(tipo %in% 2:4) ~ NA_real_, # Preenche depois com match_parcial
-        any(tipo == 5) ~ 5,
-        TRUE ~ NA_real_
+first_valid <- function(x, keep = TRUE) {
+  valid <- x[which(keep & !is.na(x))]
+  return(first(valid))
+}
+
+collapse_unique <- function(x) {
+  return(paste(unique(stats::na.omit(x)), collapse = "; "))
+}
+
+summarise_permits <- function(grouped_permits, ...) {
+  developments <- summarise(
+    grouped_permits,
+    ...,
+    tipo_match = first(tipo_match),
+    ano_aprovacao = year(first(data_aprovacao[which(aprovacao_nova)])),
+    ano_execucao = year(first(data_aprovacao[which(execucao_nova)])),
+    n_alvaras = n(),
+    n_alvaras_aprovacao = sum(projeto_valido, na.rm = TRUE),
+    n_alvaras_execucao = sum(execucao_valida, na.rm = TRUE),
+    data_autuacao_projeto = last(data_autuacao[which(projeto_valido)]),
+    data_validacao_projeto = first(data_aprovacao[which(projeto_valido)]),
+    data_autuacao_execucao = last(data_autuacao[which(execucao_valida)]),
+    data_validacao_execucao = first(data_aprovacao[which(execucao_valida)]),
+    diff_dias_projeto = as.numeric(
+      data_validacao_projeto - data_autuacao_projeto
+    ),
+    diff_dias_execucao = as.numeric(
+      data_validacao_execucao - data_validacao_projeto
+    ),
+    unidade_pmsp = paste(unique(unidade_pmsp), collapse = "; "),
+    categoria_de_uso_grupo = case_when(
+      any(ind_his) | any(ind_hmp) | any(ind_ezeis) ~ "ERP",
+      any(str_detect(categoria_de_uso, uso_residencial)) ~ "ERM",
+      .default = "Outra"
+    ),
+    categoria_de_uso_lista = collapse_unique(categoria_de_uso),
+    area_do_terreno = first_valid(area_do_terreno, fonte_areas),
+    area_da_construcao = first_valid(area_da_construcao, fonte_areas),
+    n_blocos = first_valid(n_blocos, fonte_unidades),
+    n_pavimentos = first_valid(n_pavimentos, fonte_unidades),
+    n_unidades = first_valid(n_unidades, fonte_unidades),
+    n_pavimentos_por_bloco = n_pavimentos / n_blocos,
+    n_unidades_por_bloco = n_unidades / n_blocos,
+    n_unidades_his = first_valid(unid_his, fonte_unidades),
+    n_unidades_his_por_bloco = n_unidades_his / n_blocos,
+    n_unidades_hmp = first_valid(unid_hmp, fonte_unidades),
+    n_unidades_hmp_por_bloco = n_unidades_hmp / n_blocos,
+    n_unidades_r2h_r2v = first_valid(unid_r2h_r2v, fonte_unidades),
+    n_unidades_r2h_r2v_por_bloco = n_unidades_r2h_r2v / n_blocos,
+    sql_incra = first(sql_incra),
+    sql_incra_composto = first(sql_incra_composto),
+    sql_incra_lista = collapse_unique(sql_incra),
+    n_enderecos = n_distinct(endereco),
+    endereco = first_valid(endereco),
+    endereco_lista = collapse_unique(endereco_raw),
+    distrito = first_valid(distrito),
+    subprefeitura = first_valid(subprefeitura),
+    zona_de_uso_registro = collapse_unique(zona_de_uso_registro),
+    across(
+      c(
+        ind_edificacao_nova,
+        ind_aprovacao,
+        ind_execucao,
+        ind_r2v,
+        ind_r2h,
+        ind_his,
+        ind_hmp,
+        ind_ezeis
       ),
-      empreendimento_id_final = case_when(
-        any(tipo == 1) ~ empreendimento_id[tipo == 1][1], # Pega o primeiro do match perfeito
-        any(tipo %in% 2:4) ~ NA_real_, # Preenche depois com match_parcial
-        any(tipo == 5) ~ empreendimento_id[tipo == 5][1], # Pega o primeiro do match único
-        TRUE ~ NA_real_
-      ),
-      .groups = "drop"
-    )
-
-  partial_ids <- match_parcial |>
-    select(
-      row_id,
-      empreendimento_id_parcial = empreendimento_id,
-      tipo_parcial = tipo
-    )
-  id_final <- left_join(id_final, partial_ids, by = "row_id")
-  id_final <- id_final |>
-    mutate(
-      tipo_final = if_else(is.na(tipo_final), tipo_parcial, tipo_final),
-      empreendimento_id_final = if_else(
-        is.na(empreendimento_id_final),
-        empreendimento_id_parcial,
-        empreendimento_id_final
-      )
-    ) |>
-    select(row_id, tipo_final, empreendimento_id_final)
-
-  # 5. Junta ao dataframe principal e define "sem match"
-  amostra <- amostra |>
-    mutate(row_id = row_number())
-  amostra <- left_join(amostra, id_final, by = "row_id")
-  amostra <- amostra |>
-    mutate(
-      id_empreendimento = case_when(
-        !is.na(empreendimento_id_final) & tipo_final == 1 ~ paste0(
-          "P_",
-          empreendimento_id_final
-        ),
-        !is.na(empreendimento_id_final) & tipo_final %in% 2:4 ~ paste0(
-          "M",
-          tipo_final,
-          "_",
-          empreendimento_id_final
-        ),
-        !is.na(empreendimento_id_final) & tipo_final == 5 ~ paste0(
-          "U_",
-          empreendimento_id_final
-        ),
-        TRUE ~ paste0("S_", row_id) # Sem match
-      ),
-      tipo_match = case_when(
-        tipo_final == 1 ~ "perfeito",
-        tipo_final %in% 2:4 ~ paste0("parcial_", tipo_final),
-        tipo_final == 5 ~ "único",
-        TRUE ~ "sem match"
-      )
-    ) |>
-    select(-row_id, -empreendimento_id_final, -tipo_final)
-
-  amostra <- amostra |>
-    mutate(
-      id_empreendimento_num = dense_rank(as.integer(as.factor(
-        id_empreendimento
-      ))) # Cria o ID sequencial
-    )
-
-  amostra <- amostra |>
-    subset(
-      select = c(
-        -empreendimento_id_match_1,
-        -empreendimento_id_match_2,
-        -empreendimento_id_match_3,
-        -empreendimento_id_match_4,
-        -empreendimento_id_match_5,
-        -id_empreendimento
-      )
-    )
-
-  # 4. Cria conjunto de dados por empreendimento ---------------------
-
-  # Identifica e trata casos de parcelamento
-  # Validado em uma série de reuniões Insper/Abrainc entre nov-dez de 22
-  amostra_sem_geometria <- st_drop_geometry(amostra)
-
-  # A - Tipifica parcelamento
-  parcelamento_attributes <- amostra |>
-    # Somente sql's válidos
-    filter(ind_sql_incra_null == FALSE) |>
-    # Contabiliza aprovações e execuções em alvará relevante para o sql/lote
-    group_by(sql_incra_composto) |>
-    mutate(
-      n_aprovacao = length(which(
-        ind_aprovacao == TRUE &
-          ind_correcao == FALSE &
-          ind_edificacao_nova == TRUE
-      )),
-      n_execucao = length(which(
-        ind_execucao == TRUE &
-          ind_correcao == FALSE &
-          ind_edificacao_nova == TRUE
-      ))
-    ) |>
-    ungroup() |>
-    # Tipifica sql's com áreas de terreno diferentes em alvarás relevantes de tipo igual
-    group_by(sql_incra_composto, descricao_tipo) |>
-    mutate(
-      n_areas_terreno = length(unique(area_do_terreno[
-        !is.na(area_do_terreno) &
-          (ind_edificacao_nova == TRUE |
-            ind_loteamento == TRUE |
-            ind_conclusao == TRUE)
-      ]))
-    ) |>
-    ungroup() |>
-    # Somente sql's com algum alvará relevante
-    group_by(sql_incra_composto) |>
-    filter(any(ind_edificacao_nova == TRUE)) |>
-    #1 Sql possui alvará do tipo loteamento
-    ## Descricao := {PLANO INTEGRADO}
-    group_by(sql_incra_composto) |>
-    mutate(
-      n_loteamento = length(
-        which(descricao_tipo == "PLANO INTEGRADO") &
-          ind_correcao == FALSE
-      ),
-      ind_loteamento = if_else(n_loteamento >= 1, TRUE, FALSE),
-      ind_caso_1 = if_else(
-        n_loteamento >= 1 &
-          n_areas_terreno > 1 &
-          n_aprovacao > 1 |
-          n_loteamento >= 1 &
-            n_areas_terreno > 1 &
-            n_execucao > 1,
-        TRUE,
-        FALSE
-      )
-    ) |>
-    #2 Sql possui mais de um alvará de tipo conclusão
-    group_by(sql_incra_composto) |>
-    mutate(
-      n_caso_2 = length(which(
-        ind_conclusao == TRUE &
-          ind_correcao == FALSE
-      )),
-      ind_caso_2 = if_else(n_caso_2 > 1 & n_areas_terreno > 1, TRUE, FALSE)
-    ) |>
-    #3 Sql com diferentes endereços em alvarás de tipo igual
-    group_by(sql_incra_composto, descricao_tipo) |>
-    mutate(
-      n_caso_3 = length(unique(endereco[
-        (ind_edificacao_nova == TRUE |
-          ind_loteamento == TRUE |
-          ind_conclusao == TRUE) &
-          ind_correcao == FALSE
-      ])),
-      ind_caso_3 = if_else(n_caso_3 > 1 & n_areas_terreno > 1, TRUE, FALSE)
-    ) |>
-    ungroup() |>
-    # Cria Indicador de parcelamento
-    group_by(sql_incra_composto) |>
-    mutate(
-      ind_parcelamento = if_else(
-        any(ind_edificacao_nova == TRUE) &
-          (any(ind_caso_1 == TRUE) |
-            any(ind_caso_2 == TRUE) |
-            any(ind_caso_3 == TRUE)),
-        TRUE,
-        FALSE
-      )
-    ) |>
-    ungroup()
-  parcelamento_join_cols <- intersect(
-    names(amostra_sem_geometria),
-    names(parcelamento_attributes)
+      any
+    ),
+    ind_uso_misto = categoria_de_uso_grupo != "Outra" &
+      ind_edificacao_nova &
+      str_detect(categoria_de_uso_lista, uso_nao_residencial),
+    ind_zeis = str_detect(zona_de_uso_registro, "ZEIS"),
+    ind_parcelamento = any(ind_parcelamento),
+    ponto = first(ponto),
+    .groups = "drop"
   )
-  amostra_parcelamento <- left_join(
-    amostra_sem_geometria,
-    parcelamento_attributes,
-    by = parcelamento_join_cols
+  return(developments)
+}
+
+# Parcelamentos are summarised per sub-lot (same SQL and land area), then
+# added up per SQL.
+combine_sub_lots <- function(sub_lots) {
+  # Questão para os autores: sub-lots are ordered by land area here, so
+  # `first()` takes dates, SQL, and address from the smallest sub-lot rather
+  # than the most recent one.
+  developments <- summarise(
+    group_by(sub_lots, sql_incra_composto),
+    id_empreendimento_num = first(id_empreendimento_num),
+    tipo_match = first(tipo_match),
+    ano_aprovacao = first(ano_aprovacao),
+    ano_execucao = first(ano_execucao),
+    across(c(n_alvaras, n_alvaras_aprovacao, n_alvaras_execucao), sum),
+    data_autuacao_projeto = first(data_autuacao_projeto),
+    data_validacao_projeto = first(data_validacao_projeto),
+    data_autuacao_execucao = last(data_autuacao_execucao),
+    data_validacao_execucao = first(data_validacao_execucao),
+    diff_dias_projeto = as.numeric(
+      data_validacao_projeto - data_autuacao_projeto
+    ),
+    diff_dias_execucao = as.numeric(
+      data_validacao_execucao - data_validacao_projeto
+    ),
+    unidade_pmsp = paste(unique(unidade_pmsp), collapse = "; "),
+    categoria_de_uso_grupo = if_else(
+      any(categoria_de_uso_grupo == "ERP"),
+      "ERP",
+      "ERM"
+    ),
+    categoria_de_uso_lista = collapse_unique(categoria_de_uso_lista),
+    area_do_terreno = sum(area_lote),
+    across(
+      c(
+        area_da_construcao,
+        n_blocos,
+        n_pavimentos,
+        n_unidades,
+        n_unidades_his,
+        n_unidades_hmp,
+        n_unidades_r2h_r2v
+      ),
+      sum
+    ),
+    n_pavimentos_por_bloco = n_pavimentos / n_blocos,
+    n_unidades_por_bloco = n_unidades / n_blocos,
+    n_unidades_his_por_bloco = n_unidades_his / n_blocos,
+    n_unidades_hmp_por_bloco = n_unidades_hmp / n_blocos,
+    n_unidades_r2h_r2v_por_bloco = n_unidades_r2h_r2v / n_blocos,
+    sql_incra = first(sql_incra),
+    sql_incra_lista = collapse_unique(sql_incra),
+    n_enderecos = sum(n_enderecos),
+    endereco = first_valid(endereco),
+    endereco_lista = collapse_unique(endereco),
+    distrito = first_valid(distrito),
+    subprefeitura = first_valid(subprefeitura),
+    zona_de_uso_registro = collapse_unique(zona_de_uso_registro),
+    across(
+      c(
+        ind_edificacao_nova,
+        ind_aprovacao,
+        ind_execucao,
+        ind_r2v,
+        ind_r2h,
+        ind_his,
+        ind_hmp,
+        ind_ezeis
+      ),
+      any
+    ),
+    ind_uso_misto = categoria_de_uso_grupo != "Outra" &
+      ind_edificacao_nova &
+      str_detect(categoria_de_uso_lista, uso_nao_residencial),
+    ind_zeis = str_detect(zona_de_uso_registro, "ZEIS"),
+    ind_parcelamento = any(ind_parcelamento),
+    ponto = first(ponto),
+    .groups = "drop"
   )
-
-  # Agrupa por empreendimento
-  amostra_emp <- amostra_parcelamento |>
-    filter(ind_parcelamento == FALSE) |>
-    group_by(id_empreendimento_num) |>
-    arrange(desc(data_aprovacao)) |> # importante para inferir que posição 1 é sempre data mais atual
-    summarize(
-      tipo_match = first(tipo_match),
-      ano_aprovacao = year(first(data_aprovacao[which(
-        ind_aprovacao == TRUE & ind_edificacao_nova == TRUE
-      )])),
-      ano_execucao = year(first(data_aprovacao[which(
-        ind_execucao == TRUE & ind_edificacao_nova == TRUE
-      )])),
-      n_alvaras = n(),
-      n_alvaras_aprovacao = length(which(
-        ind_aprovacao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )),
-      n_alvaras_execucao = length(which(
-        ind_execucao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )),
-      data_autuacao_projeto = last(data_autuacao[which(
-        ind_aprovacao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )]),
-      data_validacao_projeto = first(data_aprovacao[which(
-        ind_aprovacao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )]),
-      data_autuacao_execucao = last(data_autuacao[which(
-        ind_execucao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )]),
-      data_validacao_execucao = first(data_aprovacao[which(
-        ind_execucao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )]),
-      diff_dias_projeto = interval(
-        data_autuacao_projeto,
-        data_validacao_projeto
-      ) /
-        days(1),
-      diff_dias_execucao = interval(
-        data_validacao_projeto,
-        data_validacao_execucao
-      ) /
-        days(1),
-      unidade_pmsp = map_chr(
-        list(unique(unidade_pmsp)),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      categoria_de_uso_grupo = as.factor(case_when(
-        any(ind_his == TRUE) |
-          any(ind_hmp == TRUE) |
-          any(ind_ezeis == TRUE) ~ "ERP",
-        any(str_detect(
-          categoria_de_uso,
-          "R2V|R202|R302|R2H|R301|R302|R303|(?<!N)R1|(?<!N)R2"
-        )) ~ "ERM",
-        TRUE ~ "Outra"
-      )),
-      categoria_de_uso_lista = map_chr(
-        list(unique(na.omit(categoria_de_uso))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      area_do_terreno = first(na.omit(area_do_terreno[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE |
-            ind_conclusao == TRUE)
-      )])),
-      area_da_construcao = first(na.omit(area_da_construcao[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE |
-            ind_conclusao == TRUE)
-      )])),
-      n_blocos = first(na.omit(n_blocos[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_pavimentos = first(na.omit(n_pavimentos[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_unidades = first(na.omit(n_unidades[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_pavimentos_por_bloco = n_pavimentos / n_blocos,
-      n_unidades_por_bloco = n_unidades / n_blocos,
-      n_unidades_his = first(na.omit(unid_his[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_unidades_his_por_bloco = n_unidades_his / n_blocos,
-      n_unidades_hmp = first(na.omit(unid_hmp[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_unidades_hmp_por_bloco = n_unidades_hmp / n_blocos,
-      n_unidades_r2h_r2v = first(na.omit(unid_r2h_r2v[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_unidades_r2h_r2v_por_bloco = n_unidades_r2h_r2v / n_blocos,
-      sql_incra = first(sql_incra),
-      sql_incra_composto = first(sql_incra_composto),
-      sql_incra_lista = map_chr(
-        list(unique(na.omit(sql_incra))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      n_enderecos = n_distinct(endereco),
-      endereco = first(na.omit(endereco)),
-      endereco_lista = map_chr(
-        list(unique(na.omit(endereco_raw))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      distrito = first(na.omit(distrito)),
-      subprefeitura = first(na.omit(subprefeitura)),
-      zona_de_uso_registro = map_chr(
-        list(unique(na.omit(zona_de_uso_registro))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      ind_edificacao_nova = if_else(
-        any(ind_edificacao_nova == TRUE),
-        TRUE,
-        FALSE
-      ),
-      ind_aprovacao = if_else(any(ind_aprovacao == TRUE), TRUE, FALSE),
-      ind_execucao = if_else(any(ind_execucao == TRUE), TRUE, FALSE),
-      ind_r2v = if_else(any(ind_r2v == TRUE), TRUE, FALSE),
-      ind_r2h = if_else(any(ind_r2h == TRUE), TRUE, FALSE),
-      ind_his = if_else(any(ind_his == TRUE), TRUE, FALSE),
-      ind_hmp = if_else(any(ind_hmp == TRUE), TRUE, FALSE),
-      ind_ezeis = if_else(any(ind_ezeis == TRUE), TRUE, FALSE),
-      ind_uso_misto = if_else(
-        categoria_de_uso_grupo != "Outra" &
-          ind_edificacao_nova == TRUE &
-          any(str_detect(
-            categoria_de_uso_lista,
-            "NR|C1|C2|C3|S1|S2|S3|E1|E2|E3|E4"
-          )),
-        TRUE,
-        FALSE
-      ),
-      ind_zeis = if_else(
-        any(str_detect(zona_de_uso_registro, "ZEIS")),
-        TRUE,
-        FALSE
-      ),
-      ind_parcelamento = if_else(any(ind_parcelamento == TRUE), TRUE, FALSE),
-      geometry = first(geometry)
-    ) |>
-    ungroup()
-
-  # B - Trata em separado atributos numéricos em casos de parcelamento
-  # Somente parcelamentos
-  atts_ind_parcelamento <- amostra_parcelamento |>
-    filter(ind_parcelamento == TRUE) |>
-    # Ordena mais recente para mais antigo
-    arrange(desc(data_aprovacao)) |>
-    # Agrupa por Área de terreno e pega informação do mais recente por grupo
-    ## Grupo = mesmo sql, mesma área de terreno
-    group_by(sql_incra_composto, area_do_terreno) |>
-    summarize(
-      id_empreendimento_num = first(id_empreendimento_num),
-      tipo_match = first(tipo_match),
-      ano_aprovacao = year(first(data_aprovacao[which(
-        ind_aprovacao == TRUE & ind_edificacao_nova == TRUE
-      )])),
-      ano_execucao = year(first(data_aprovacao[which(
-        ind_execucao == TRUE & ind_edificacao_nova == TRUE
-      )])),
-      n_alvaras = n(),
-      n_alvaras_aprovacao = length(which(
-        ind_aprovacao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )),
-      n_alvaras_execucao = length(which(
-        ind_execucao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )),
-      data_autuacao_projeto = last(data_autuacao[which(
-        ind_aprovacao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )]),
-      data_validacao_projeto = first(data_aprovacao[which(
-        ind_aprovacao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )]),
-      data_autuacao_execucao = last(data_autuacao[which(
-        ind_execucao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )]),
-      data_validacao_execucao = first(data_aprovacao[which(
-        ind_execucao == TRUE &
-          ind_edificacao_nova == TRUE &
-          ind_correcao == FALSE
-      )]),
-      diff_dias_projeto = interval(
-        data_autuacao_projeto,
-        data_validacao_projeto
-      ) /
-        days(1),
-      diff_dias_execucao = interval(
-        data_validacao_projeto,
-        data_validacao_execucao
-      ) /
-        days(1),
-      unidade_pmsp = map_chr(
-        list(unique(unidade_pmsp)),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      categoria_de_uso_grupo = as.factor(case_when(
-        any(ind_his == TRUE) |
-          any(ind_hmp == TRUE) |
-          any(ind_ezeis == TRUE) ~ "ERP",
-        any(str_detect(
-          categoria_de_uso,
-          "R2V|R202|R302|R2H|R301|R302|R303|(?<!N)R1|(?<!N)R2"
-        )) ~ "ERM",
-        TRUE ~ "Outra"
-      )),
-      categoria_de_uso_lista = map_chr(
-        list(unique(na.omit(categoria_de_uso))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      area_da_construcao = first(na.omit(area_da_construcao[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE |
-            ind_conclusao == TRUE)
-      )])),
-      n_blocos = first(na.omit(n_blocos[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_pavimentos = first(na.omit(n_pavimentos[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_unidades = first(na.omit(n_unidades[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_unidades_his = first(na.omit(unid_his[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_unidades_hmp = first(na.omit(unid_hmp[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      n_unidades_r2h_r2v = first(na.omit(unid_r2h_r2v[which(
-        ind_edificacao_nova == TRUE &
-          (ind_aprovacao == TRUE |
-            ind_execucao == TRUE)
-      )])),
-      sql_incra = first(sql_incra),
-      sql_incra_composto = first(sql_incra_composto),
-      sql_incra_lista = map_chr(
-        list(unique(na.omit(sql_incra))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      n_enderecos = n_distinct(endereco),
-      endereco = first(na.omit(endereco)),
-      endereco_lista = map_chr(
-        list(unique(na.omit(endereco_raw))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      distrito = first(na.omit(distrito)),
-      subprefeitura = first(na.omit(subprefeitura)),
-      zona_de_uso_registro = map_chr(
-        list(unique(na.omit(zona_de_uso_registro))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      ind_edificacao_nova = if_else(
-        any(ind_edificacao_nova == TRUE),
-        TRUE,
-        FALSE
-      ),
-      ind_aprovacao = if_else(any(ind_aprovacao == TRUE), TRUE, FALSE),
-      ind_execucao = if_else(any(ind_execucao == TRUE), TRUE, FALSE),
-      ind_r2v = if_else(any(ind_r2v == TRUE), TRUE, FALSE),
-      ind_r2h = if_else(any(ind_r2h == TRUE), TRUE, FALSE),
-      ind_his = if_else(any(ind_his == TRUE), TRUE, FALSE),
-      ind_hmp = if_else(any(ind_hmp == TRUE), TRUE, FALSE),
-      ind_ezeis = if_else(any(ind_ezeis == TRUE), TRUE, FALSE),
-      ind_uso_misto = if_else(
-        categoria_de_uso_grupo != "Outra" &
-          ind_edificacao_nova == TRUE &
-          any(str_detect(
-            categoria_de_uso_lista,
-            "NR|C1|C2|C3|S1|S2|S3|E1|E2|E3|E4"
-          )),
-        TRUE,
-        FALSE
-      ),
-      ind_zeis = if_else(
-        any(str_detect(zona_de_uso_registro, "ZEIS")),
-        TRUE,
-        FALSE
-      ),
-      ind_parcelamento = if_else(any(ind_parcelamento == TRUE), TRUE, FALSE),
-      geometry = first(geometry)
-    ) |>
-    # Somas os valores dos agrupamentos
-    group_by(sql_incra_composto) |>
-    summarize(
-      id_empreendimento_num = first(id_empreendimento_num),
-      tipo_match = first(tipo_match),
-      ano_aprovacao = first(ano_aprovacao),
-      ano_execucao = first(ano_execucao),
-      n_alvaras = sum(n_alvaras),
-      n_alvaras_aprovacao = sum(n_alvaras_aprovacao),
-      n_alvaras_execucao = sum(n_alvaras_execucao),
-      data_autuacao_projeto = first(data_autuacao_projeto),
-      data_validacao_projeto = first(data_validacao_projeto),
-      data_autuacao_execucao = last(data_autuacao_execucao),
-      data_validacao_execucao = first(data_validacao_execucao),
-      diff_dias_projeto = interval(
-        data_autuacao_projeto,
-        data_validacao_projeto
-      ) /
-        days(1),
-      diff_dias_execucao = interval(
-        data_validacao_projeto,
-        data_validacao_execucao
-      ) /
-        days(1),
-      unidade_pmsp = map_chr(
-        list(unique(unidade_pmsp)),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      categoria_de_uso_grupo = if_else(
-        any(categoria_de_uso_grupo == "ERP"),
-        "ERP",
-        "ERM"
-      ),
-      categoria_de_uso_lista = map_chr(
-        list(unique(na.omit(categoria_de_uso_lista))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      area_do_terreno = sum(area_do_terreno),
-      area_da_construcao = sum(area_da_construcao),
-      n_blocos = sum(n_blocos),
-      n_pavimentos = sum(n_pavimentos),
-      n_unidades = sum(n_unidades),
-      n_pavimentos_por_bloco = n_pavimentos / n_blocos,
-      n_unidades_por_bloco = n_unidades / n_blocos,
-      n_unidades_his = sum(n_unidades_his),
-      n_unidades_his_por_bloco = n_unidades_his / n_blocos,
-      n_unidades_hmp = sum(n_unidades_hmp),
-      n_unidades_hmp_por_bloco = n_unidades_hmp / n_blocos,
-      n_unidades_r2h_r2v = sum(n_unidades_r2h_r2v),
-      n_unidades_r2h_r2v_por_bloco = n_unidades_r2h_r2v / n_blocos,
-      sql_incra = first(sql_incra),
-      sql_incra_composto = first(sql_incra_composto),
-      sql_incra_lista = map_chr(
-        list(unique(na.omit(sql_incra))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      n_enderecos = sum(n_enderecos),
-      endereco = first(na.omit(endereco)),
-      endereco_lista = map_chr(
-        list(unique(na.omit(endereco))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      distrito = first(na.omit(distrito)),
-      subprefeitura = first(na.omit(subprefeitura)),
-      zona_de_uso_registro = map_chr(
-        list(unique(na.omit(zona_de_uso_registro))),
-        ~ paste0(.x, collapse = "; ")
-      ),
-      ind_edificacao_nova = if_else(
-        any(ind_edificacao_nova == TRUE),
-        TRUE,
-        FALSE
-      ),
-      ind_aprovacao = if_else(any(ind_aprovacao == TRUE), TRUE, FALSE),
-      ind_execucao = if_else(any(ind_execucao == TRUE), TRUE, FALSE),
-      ind_r2h = if_else(any(ind_r2h == TRUE), TRUE, FALSE),
-      ind_r2v = if_else(any(ind_r2v == TRUE), TRUE, FALSE),
-      ind_his = if_else(any(ind_his == TRUE), TRUE, FALSE),
-      ind_hmp = if_else(any(ind_hmp == TRUE), TRUE, FALSE),
-      ind_ezeis = if_else(any(ind_ezeis == TRUE), TRUE, FALSE),
-      ind_uso_misto = if_else(
-        categoria_de_uso_grupo != "Outra" &
-          ind_edificacao_nova == TRUE &
-          any(str_detect(
-            categoria_de_uso_lista,
-            "NR|C1|C2|C3|S1|S2|S3|E1|E2|E3|E4"
-          )),
-        TRUE,
-        FALSE
-      ),
-      ind_zeis = if_else(
-        any(str_detect(zona_de_uso_registro, "ZEIS")),
-        TRUE,
-        FALSE
-      ),
-      ind_parcelamento = if_else(any(ind_parcelamento == TRUE), TRUE, FALSE),
-      geometry = first(geometry)
-    ) |>
-    ungroup() |>
-    # Ajusta subnotificação de NA
-    mutate(across(where(is.numeric), ~ ifelse(.x == 0, NA, .x)))
-
-  # Combina dois dataframes
-  amostra_por_emp <-
-    bind_rows(amostra_emp, atts_ind_parcelamento)
-
-  # Exporta alvarás agrupados
-  amostra_por_emp <- amostra_por_emp |>
-    filter(ind_aprovacao == TRUE & ind_execucao == TRUE)
-
-  amostra_por_emp <- st_sf(
-    amostra_por_emp,
-    amostra_por_emp$geometry,
-    crs = 31983
+  # Zero counts and areas are unreported values.
+  developments <- mutate(
+    developments,
+    across(where(is.numeric), \(x) if_else(x == 0, NA, x))
   )
-  amostra_por_emp <- subset(
-    amostra_por_emp,
-    select = -c(geometry, sql_incra_composto, sql_incra_lista)
-  )
-  amostra_por_emp <- amostra_por_emp |>
-    rename(geometry = amostra_por_emp.geometry) |>
-    filter(!(n_unidades <= 5) | is.na(n_unidades))
+  return(developments)
+}
 
-  return(amostra_por_emp)
+summarise_developments <- function(permits) {
+  permits <- mutate(
+    permits,
+    aprovacao_nova = ind_aprovacao & ind_edificacao_nova,
+    execucao_nova = ind_execucao & ind_edificacao_nova,
+    projeto_valido = aprovacao_nova & !ind_correcao,
+    execucao_valida = execucao_nova & !ind_correcao,
+    fonte_areas = ind_edificacao_nova &
+      (ind_aprovacao | ind_execucao | ind_conclusao),
+    fonte_unidades = ind_edificacao_nova & (ind_aprovacao | ind_execucao)
+  )
+  # Most recent permit first: `first()` takes the latest value.
+  permits <- arrange(permits, desc(data_aprovacao))
+
+  single_lots <- filter(permits, !ind_parcelamento)
+  developments <- summarise_permits(group_by(
+    single_lots,
+    id_empreendimento_num
+  ))
+
+  parcelamentos <- filter(permits, ind_parcelamento)
+  parcelamentos <- mutate(parcelamentos, area_lote = area_do_terreno)
+  sub_lots <- summarise_permits(
+    group_by(parcelamentos, sql_incra_composto, area_lote),
+    id_empreendimento_num = first(id_empreendimento_num)
+  )
+  parcel_developments <- combine_sub_lots(sub_lots)
+
+  developments <- bind_rows(developments, parcel_developments)
+  return(developments)
 }
