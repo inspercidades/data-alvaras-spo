@@ -17,12 +17,13 @@ url_exists <- function(url, timeout_seconds = 5) {
 find_latest_alvaras_url <- function(
   start_date = Sys.Date(),
   max_days = 365,
-  url_template = alvaras_url_template
+  url_template = alvaras_url_template,
+  url_checker = url_exists
 ) {
   dates <- start_date - seq.int(0, max_days)
-  for (date in dates) {
-    url <- sprintf(url_template, format(date, "%Y%m%d"))
-    if (url_exists(url)) return(url)
+  urls <- sprintf(url_template, format(dates, "%Y%m%d"))
+  for (url in urls) {
+    if (url_checker(url)) return(url)
   }
   cli::cli_abort(
     "No permit archive was found in the previous {max_days + 1} days."
