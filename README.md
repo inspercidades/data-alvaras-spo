@@ -11,13 +11,14 @@ Dataverse](https://doi.org/10.60873/FK2/FPCIDI). The current release covers
 
 ## Reproducibility status
 
-The implementation has been migrated from three sequential scripts to a
-`targets` pipeline. The rules in the original scripts are authoritative.
+The `targets` pipeline replaces three sequential scripts and reproduces
+version 3 from its supplied inputs. Regression tests compare the cleaned
+permits and the final developments with the received snapshots, column by
+column.
 
-The supplied geocoded intermediate does not reproduce the supplied final file
-under the pinned environment. The final file remains the authoritative
-historical release. See [the validation notes](validation/README.md) for the
-measured divergence and its likely cause.
+Some version 3 rules need review with the dataset authors before the next
+release. The pipeline keeps them unchanged; [the validation
+notes](validation/README.md) list them.
 
 ## Run the pipeline
 
@@ -38,8 +39,10 @@ the dated URL is committed in `config/source.yml`; the release retains the
 generated manifest so its exact bytes can be verified.
 
 Coordinates supplied by the municipality take priority. Missing coordinates
-are obtained from ArcGIS. Remote geocoding is not run in continuous integration;
-its cache and publication policy will be reviewed with the dataset authors.
+are obtained from ArcGIS, which covers fewer than 1% of permits. The geocoding
+cache stores each ArcGIS match score and match type, and the pipeline warns
+when a permit is placed at a street or town centroid. Remote geocoding is not
+run in continuous integration.
 
 ## Repository structure
 
