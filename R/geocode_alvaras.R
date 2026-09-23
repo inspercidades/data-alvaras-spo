@@ -24,15 +24,29 @@ build_geocoding_queries <- function(permits) {
   return(queries)
 }
 
+empty_geocoding_cache <- function() {
+  cache <- tibble::tibble(
+    endereco_key = character(),
+    long = double(),
+    lat = double(),
+    geocode_score = double(),
+    geocode_tipo = character(),
+    geocode_endereco = character()
+  )
+  return(cache)
+}
+
 read_geocoding_cache <- function(path) {
   if (!fs::file_exists(path)) {
-    return(tibble::tibble(
-      endereco_key = character(),
-      long = double(),
-      lat = double()
-    ))
+    return(empty_geocoding_cache())
   }
   cache <- arrow::read_parquet(path)
+  if (!"geocode_tipo" %in% names(cache)) {
+    cli::cli_inform(
+      "The geocoding cache in {.file {path}} has no match scores; rebuilding it."
+    )
+    return(empty_geocoding_cache())
+  }
   return(cache)
 }
 
@@ -52,7 +66,21 @@ update_geocoding_cache <- function(
     new_queries,
     address = "endereco_key",
     method = "arcgis",
+    full_results = TRUE,
     verbose = FALSE
+  )
+  # ArcGIS reports a match score (0-100) and the match type, such as
+  # "PointAddress" or "Locality".
+  geocoded <- dplyr::select(
+    geocoded,
+    endereco_key,
+    long,
+    lat,
+    dplyr::any_of(c(
+      geocode_score = "score",
+      geocode_tipo = "attributes.Addr_type",
+      geocode_endereco = "arcgis_address"
+    ))
   )
   updated_cache <- dplyr::bind_rows(cache, geocoded)
   updated_cache <- dplyr::distinct(
