@@ -117,26 +117,15 @@ classify_match_pairs <- function(geo_permits, distance_threshold) {
 }
 
 component_ids <- function(match_pairs, number_of_permits) {
-  vertices <- data.frame(name = as.character(seq_len(number_of_permits)))
   ids <- vector("list", 5)
 
-  for (match_type in seq_len(5)) {
-    edges <- dplyr::filter(match_pairs, .data$match_type == match_type)
-    edges <- dplyr::select(edges, from = left, to = right)
-    edges$from <- as.character(edges$from)
-    edges$to <- as.character(edges$to)
-    graph <- igraph::graph_from_data_frame(
-      edges,
-      directed = FALSE,
-      vertices = vertices
-    )
-    membership <- igraph::components(graph)$membership
-    membership <- membership[as.character(seq_len(number_of_permits))]
-    component_minimum <- tapply(seq_along(membership), membership, min)
-    component_order <- order(component_minimum)
-    canonical_id <- integer(length(component_order))
-    canonical_id[component_order] <- seq_along(component_order)
-    ids[[match_type]] <- unname(canonical_id[membership])
+  # igraph numbers components in order of their lowest vertex, which matches
+  # the labels of the original dense adjacency matrices.
+  for (type in seq_len(5)) {
+    edges <- match_pairs[match_pairs$match_type == type, c("left", "right")]
+    graph <- igraph::make_empty_graph(number_of_permits, directed = FALSE)
+    graph <- igraph::add_edges(graph, as.vector(t(as.matrix(edges))))
+    ids[[type]] <- igraph::components(graph)$membership
   }
 
   names(ids) <- paste0("empreendimento_id_match_", seq_len(5))

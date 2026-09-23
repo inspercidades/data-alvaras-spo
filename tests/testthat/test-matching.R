@@ -61,6 +61,19 @@ test_that("sparse component labels reproduce dense graph labels", {
   expect_equal(ids$empreendimento_id_match_1, unname(expected))
 })
 
+test_that("each match type forms its own graph", {
+  pairs <- data.frame(
+    left = c(1L, 3L),
+    right = c(2L, 4L),
+    match_type = c(1L, 3L)
+  )
+  ids <- component_ids(pairs, number_of_permits = 4)
+
+  expect_equal(ids$empreendimento_id_match_1, c(1, 1, 2, 3))
+  expect_equal(ids$empreendimento_id_match_3, c(1, 2, 3, 3))
+  expect_equal(ids$empreendimento_id_match_5, c(1, 2, 3, 4))
+})
+
 test_that("matching accepts inputs without candidate pairs", {
   permits <- sf::st_sf(
     sql_incra_composto = c("A", "B"),

@@ -22,7 +22,6 @@ import::from(
   starts_with,
   ungroup
 )
-import::from(forcats, as_factor)
 import::from(lubridate, NA_Date_, as_date, month, year, ymd)
 import::from(purrr, map_chr, reduce)
 import::from(
@@ -36,6 +35,22 @@ import::from(
   str_squish,
   str_to_upper,
   str_trim
+)
+
+# Month names are fixed so the output does not depend on the system locale.
+meses <- c(
+  "JANEIRO",
+  "FEVEREIRO",
+  "MARÇO",
+  "ABRIL",
+  "MAIO",
+  "JUNHO",
+  "JULHO",
+  "AGOSTO",
+  "SETEMBRO",
+  "OUTUBRO",
+  "NOVEMBRO",
+  "DEZEMBRO"
 )
 
 clean_alvaras <- function(alvaras_raw) {
@@ -150,11 +165,7 @@ clean_alvaras <- function(alvaras_raw) {
   att_mes <- categorical_source |>
     mutate(
       mes_raw = mes,
-      mes = as_factor(str_to_upper(month(
-        data_aprovacao,
-        label = TRUE,
-        abbr = FALSE
-      )))
+      mes = factor(meses[month(data_aprovacao)], levels = meses)
     ) |>
     select(id, mes_raw, mes)
   # B - Ano
