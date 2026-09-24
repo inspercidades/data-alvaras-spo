@@ -1065,48 +1065,6 @@
       "Maintainer": "Hadley Wickham <hadley@posit.co>",
       "Repository": "CRAN"
     },
-    "forcats": {
-      "Package": "forcats",
-      "Version": "1.0.1",
-      "Source": "Repository",
-      "Title": "Tools for Working with Categorical Variables (Factors)",
-      "Authors@R": "c( person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = c(\"aut\", \"cre\")), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\"), comment = c(ROR = \"03wc8by49\")) )",
-      "Description": "Helpers for reordering factor levels (including moving specified levels to front, ordering by first appearance, reversing, and randomly shuffling), and tools for modifying factor levels (including collapsing rare levels into other, 'anonymising', and manually 'recoding').",
-      "License": "MIT + file LICENSE",
-      "URL": "https://forcats.tidyverse.org/, https://github.com/tidyverse/forcats",
-      "BugReports": "https://github.com/tidyverse/forcats/issues",
-      "Depends": [
-        "R (>= 4.1)"
-      ],
-      "Imports": [
-        "cli (>= 3.4.0)",
-        "glue",
-        "lifecycle",
-        "magrittr",
-        "rlang (>= 1.0.0)",
-        "tibble"
-      ],
-      "Suggests": [
-        "covr",
-        "dplyr",
-        "ggplot2",
-        "knitr",
-        "readr",
-        "rmarkdown",
-        "testthat (>= 3.0.0)",
-        "withr"
-      ],
-      "VignetteBuilder": "knitr",
-      "Config/Needs/website": "tidyverse/tidytemplate",
-      "Config/testthat/edition": "3",
-      "Encoding": "UTF-8",
-      "LazyData": "true",
-      "RoxygenNote": "7.3.3",
-      "NeedsCompilation": "no",
-      "Author": "Hadley Wickham [aut, cre], Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
-      "Maintainer": "Hadley Wickham <hadley@posit.co>",
-      "Repository": "CRAN"
-    },
     "fs": {
       "Package": "fs",
       "Version": "2.1.0",
@@ -2770,57 +2728,6 @@
       "NeedsCompilation": "no",
       "Author": "Jesse Cambon [aut, cre] (<https://orcid.org/0000-0001-6854-1514>), Diego Hernangómez [aut] (<https://orcid.org/0000-0001-8457-4658>), Christopher Belanger [aut] (<https://orcid.org/0000-0003-2070-5721>), Daniel Possenriede [aut] (<https://orcid.org/0000-0002-6738-9845>), Otto Hansen [ctb] (<https://orcid.org/0000-0002-4618-5667>)",
       "Maintainer": "Jesse Cambon <jesse.cambon@gmail.com>",
-      "Repository": "CRAN"
-    },
-    "tidyr": {
-      "Package": "tidyr",
-      "Version": "1.3.2",
-      "Source": "Repository",
-      "Title": "Tidy Messy Data",
-      "Authors@R": "c( person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = c(\"aut\", \"cre\")), person(\"Davis\", \"Vaughan\", , \"davis@posit.co\", role = \"aut\"), person(\"Maximilian\", \"Girlich\", role = \"aut\"), person(\"Kevin\", \"Ushey\", , \"kevin@posit.co\", role = \"ctb\"), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
-      "Description": "Tools to help to create tidy data, where each column is a variable, each row is an observation, and each cell contains a single value. 'tidyr' contains tools for changing the shape (pivoting) and hierarchy (nesting and 'unnesting') of a dataset, turning deeply nested lists into rectangular data frames ('rectangling'), and extracting values out of string columns. It also includes tools for working with missing values (both implicit and explicit).",
-      "License": "MIT + file LICENSE",
-      "URL": "https://tidyr.tidyverse.org, https://github.com/tidyverse/tidyr",
-      "BugReports": "https://github.com/tidyverse/tidyr/issues",
-      "Depends": [
-        "R (>= 4.1.0)"
-      ],
-      "Imports": [
-        "cli (>= 3.4.1)",
-        "dplyr (>= 1.1.0)",
-        "glue",
-        "lifecycle (>= 1.0.3)",
-        "magrittr",
-        "purrr (>= 1.0.1)",
-        "rlang (>= 1.1.1)",
-        "stringr (>= 1.5.0)",
-        "tibble (>= 2.1.1)",
-        "tidyselect (>= 1.2.1)",
-        "utils",
-        "vctrs (>= 0.5.2)"
-      ],
-      "Suggests": [
-        "covr",
-        "data.table",
-        "knitr",
-        "readr",
-        "repurrrsive (>= 1.1.0)",
-        "rmarkdown",
-        "testthat (>= 3.0.0)"
-      ],
-      "LinkingTo": [
-        "cpp11 (>= 0.4.0)"
-      ],
-      "VignetteBuilder": "knitr",
-      "Config/build/compilation-database": "true",
-      "Config/Needs/website": "tidyverse/tidytemplate",
-      "Config/testthat/edition": "3",
-      "Encoding": "UTF-8",
-      "LazyData": "true",
-      "RoxygenNote": "7.3.3",
-      "NeedsCompilation": "yes",
-      "Author": "Hadley Wickham [aut, cre], Davis Vaughan [aut], Maximilian Girlich [aut], Kevin Ushey [ctb], Posit Software, PBC [cph, fnd]",
-      "Maintainer": "Hadley Wickham <hadley@posit.co>",
       "Repository": "CRAN"
     },
     "tidyselect": {

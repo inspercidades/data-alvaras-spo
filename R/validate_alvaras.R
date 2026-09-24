@@ -71,8 +71,26 @@ validate_geocoded_alvaras <- function(
   inside_city <- lengths(sf::st_intersects(geo_permits, city_boundary)) > 0
   if (any(!inside_city)) {
     cli::cli_warn(
-      "{sum(!inside_city)} geocoded permits fall outside São Paulo."
+      "{sum(!inside_city)} geocoded permit{?s} fall{?s/} outside São Paulo."
     )
+  }
+
+  # Matches coarser than an address point or street segment, such as a
+  # street or town centroid.
+  street_level <- c(
+    "PointAddress",
+    "Subaddress",
+    "StreetAddress",
+    "StreetAddressExt"
+  )
+  coarse <- !is.na(geo_permits$geocode_tipo) &
+    !geo_permits$geocode_tipo %in% street_level
+  if (any(coarse)) {
+    coarse_addresses <- unique(geo_permits$endereco[coarse])
+    cli::cli_warn(c(
+      "{sum(coarse)} permit{?s} {?was/were} geocoded coarser than street level.",
+      "i" = "Addresses: {.val {coarse_addresses}}"
+    ))
   }
   return(invisible(geo_permits))
 }

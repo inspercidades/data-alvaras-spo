@@ -38,16 +38,30 @@ whether the cache can be published before claiming full reproducibility.
 The legacy matcher allocated several dense pairwise matrices. At 26,886 permit
 records, one dense matrix contains more than 722 million cells. The rewrite
 generates candidate pairs from shared SQL identifiers and spatial neighborhoods,
-then builds sparse graphs. Pair-level tests prove equivalence of the five match
-rules without preserving the memory-heavy representation.
+then builds sparse graphs.
 
-## Do not use incidental identifiers as domain keys
+## Test the whole output, not only the pieces
 
-Connected-component numbers are local labels whose values depend on graph and
-package implementation details. They must not be compared across independently
-built graphs. Convert components to stable domain identifiers or carry the graph
-type as part of the key. Pinning dependencies helps reproduction but does not
-turn incidental labels into a sound data model.
+Pair-level tests confirmed the five match rules, yet the pipeline still
+produced 12,206 developments instead of 11,735. The bug sat between the tested
+pieces: `dplyr::filter(pairs, .data$match_type == match_type)` inside a loop
+compares the column with itself, because a bare name in a data mask refers to
+the column first. Use `.env$` or a loop variable that is not a column name.
+Unit tests should mix cases, such as several match types, and a regression
+test should rebuild each received snapshot from its received input and
+compare every column.
+
+## Remove hidden environment dependencies
+
+The original script took month names from the system locale, so the same code
+wrote "JANEIRO" on one machine and "JANUARY" on another. Fix such values in
+code. Sort strings with `method = "radix"` when the order feeds an identifier.
+
+## Keep questionable rules visible
+
+A migration should reproduce the published data first. Rules that look wrong
+stay in place, marked in the code and listed for the dataset authors. Each
+change after review then becomes a documented difference between releases.
 
 ## Make dependencies explicit
 
