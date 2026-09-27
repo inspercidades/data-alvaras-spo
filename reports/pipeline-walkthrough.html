@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.37">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-09-26">
+
+<title>From permits to developments: how the São Paulo building-permit pipeline works</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="pipeline-walkthrough_files/libs/clipboard/clipboard.min.js"></script>
+<script src="pipeline-walkthrough_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="pipeline-walkthrough_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="pipeline-walkthrough_files/libs/quarto-html/popper.min.js"></script>
+<script src="pipeline-walkthrough_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="pipeline-walkthrough_files/libs/quarto-html/anchor.min.js"></script>
+<link href="pipeline-walkthrough_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="pipeline-walkthrough_files/libs/quarto-html/quarto-syntax-highlighting-7f8f88aac4f3542376d5c11b86a4c14d.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="pipeline-walkthrough_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="pipeline-walkthrough_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="pipeline-walkthrough_files/libs/bootstrap/bootstrap-d4791fd432f8730d65180f3796899ee9.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="pipeline-walkthrough_files/libs/quarto-diagram/mermaid.min.js"></script>
+<script src="pipeline-walkthrough_files/libs/quarto-diagram/mermaid-init.js"></script>
+<link href="pipeline-walkthrough_files/libs/quarto-diagram/mermaid.css" rel="stylesheet">
+
+
+<link rel="stylesheet" href="inter.css">
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#what-this-document-shows" id="toc-what-this-document-shows" class="nav-link active" data-scroll-target="#what-this-document-shows">What this document shows</a></li>
+  <li><a href="#the-raw-material" id="toc-the-raw-material" class="nav-link" data-scroll-target="#the-raw-material">The raw material</a></li>
+  <li><a href="#the-pipeline-in-five-stages" id="toc-the-pipeline-in-five-stages" class="nav-link" data-scroll-target="#the-pipeline-in-five-stages">The pipeline in five stages</a>
+  <ul class="collapse">
+  <li><a href="#fetch-and-read" id="toc-fetch-and-read" class="nav-link" data-scroll-target="#fetch-and-read">Fetch and read</a></li>
+  <li><a href="#clean" id="toc-clean" class="nav-link" data-scroll-target="#clean">Clean</a></li>
+  <li><a href="#geocode" id="toc-geocode" class="nav-link" data-scroll-target="#geocode">Geocode</a></li>
+  <li><a href="#group-and-summarize" id="toc-group-and-summarize" class="nav-link" data-scroll-target="#group-and-summarize">Group and summarize</a></li>
+  </ul></li>
+  <li><a href="#sec-examples" id="toc-sec-examples" class="nav-link" data-scroll-target="#sec-examples">Worked examples</a>
+  <ul class="collapse">
+  <li><a href="#a-perfect-match" id="toc-a-perfect-match" class="nav-link" data-scroll-target="#a-perfect-match">A perfect match</a></li>
+  <li><a href="#a-parcelamento" id="toc-a-parcelamento" class="nav-link" data-scroll-target="#a-parcelamento">A parcelamento</a></li>
+  <li><a href="#a-geocoded-address" id="toc-a-geocoded-address" class="nav-link" data-scroll-target="#a-geocoded-address">A geocoded address</a></li>
+  <li><a href="#a-permit-left-out" id="toc-a-permit-left-out" class="nav-link" data-scroll-target="#a-permit-left-out">A permit left out</a></li>
+  </ul></li>
+  <li><a href="#sec-replication" id="toc-sec-replication" class="nav-link" data-scroll-target="#sec-replication">Replication check</a></li>
+  <li><a href="#questions-for-the-dataset-authors" id="toc-questions-for-the-dataset-authors" class="nav-link" data-scroll-target="#questions-for-the-dataset-authors">Questions for the dataset authors</a></li>
+  <li><a href="#reproduce-it-yourself" id="toc-reproduce-it-yourself" class="nav-link" data-scroll-target="#reproduce-it-yourself">Reproduce it yourself</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">From permits to developments: how the São Paulo building-permit pipeline works</h1>
+<p class="subtitle lead">A plain-language walkthrough with worked parcel examples</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">September 26, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="what-this-document-shows" class="level2">
+<h2 class="anchored" data-anchor-id="what-this-document-shows">What this document shows</h2>
+<p>São Paulo publishes building permits as individual records. This repository turns those records into a dataset of developments. One development groups every permit that refers to the same construction project.</p>
+<p>The pipeline reproduces the published version 3 of the dataset. Cleaning matches the version 3 file permit by permit. Development matching matches it development by development. A fresh end-to-end run gives the same totals: 11,735 developments and 914,401 housing units. One development changes match type because the geocoding service moved one address slightly. <a href="#sec-replication" class="quarto-xref">Section&nbsp;5</a> records each check.</p>
+<p>The rest of this document walks through the pipeline the way data flows. Each stage states what enters, what leaves, and why the step exists. Four worked examples trace real parcels through the machinery. The final section lists six questions that only the dataset authors can settle.</p>
+</section>
+<section id="the-raw-material" class="level2">
+<h2 class="anchored" data-anchor-id="the-raw-material">The raw material</h2>
+<p>The municipality posts a dated archive of permit records on its PDE monitoring portal. The pipeline records the archive URL, the download time, and a SHA-256 checksum in <code>data/raw/source.yml</code>. A release pins one dated URL in <code>config/source.yml</code> so anyone can verify the exact bytes later.</p>
+<p>The version 3 archive dates from 2025-04-22. Its CSV holds one row per permit with the permit number, a free-text description, the approval unit, the land registry number (SQL), land and building areas, block and unit counts, dates, the address, the district, and municipal coordinates.</p>
+</section>
+<section id="the-pipeline-in-five-stages" class="level2">
+<h2 class="anchored" data-anchor-id="the-pipeline-in-five-stages">The pipeline in five stages</h2>
+<p>The <code>targets</code> pipeline has nine steps. They form five stages. Each stage feeds the next one, and <code>targets</code> reruns only stages whose inputs changed.</p>
+<div class="cell" data-layout-align="default">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode default code-with-copy"><code class="sourceCode default"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>flowchart LR</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  A[Fetch&lt;br/&gt;dated archive] --&gt; B[Read&lt;br/&gt;raw CSV]</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  B --&gt; C[Clean&lt;br/&gt;27,009 permits]</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  C --&gt; D[Geocode&lt;br/&gt;26,886 located]</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  D --&gt; E[Group and summarize&lt;br/&gt;11,735 developments]</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  E --&gt; F[Write&lt;br/&gt;alvaras.parquet]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div id="fig-pipeline" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div>
+<pre class="mermaid mermaid-js" data-label="fig-pipeline">flowchart LR
+  A[Fetch&lt;br/&gt;dated archive] --&gt; B[Read&lt;br/&gt;raw CSV]
+  B --&gt; C[Clean&lt;br/&gt;27,009 permits]
+  C --&gt; D[Geocode&lt;br/&gt;26,886 located]
+  D --&gt; E[Group and summarize&lt;br/&gt;11,735 developments]
+  E --&gt; F[Write&lt;br/&gt;alvaras.parquet]
+</pre>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: The five stages. Row counts come from the version 3 run.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<section id="fetch-and-read" class="level3">
+<h3 class="anchored" data-anchor-id="fetch-and-read">Fetch and read</h3>
+<p>The pipeline resolves the source URL, downloads the zip, and writes the manifest. The reader opens the single permit CSV inside the zip and checks that every expected column is present. If the municipality renames a column, the pipeline stops here with the missing names.</p>
+</section>
+<section id="clean" class="level3">
+<h3 class="anchored" data-anchor-id="clean">Clean</h3>
+<p>Cleaning standardizes 27,009 permit records. It renames columns, parses dates and numbers, and derives classifications from the free-text description. Each permit gets an approval type such as approval, execution, or conclusion. It also gets flags for new construction, social housing categories, and corrections.</p>
+<p>Addresses need special care. The same street appears with and without its type prefix, as in “R HEITOR PENTEADO” and “HEITOR PENTEADO”. Within each subprefecture, every spelling takes the address of the most recent permit. This step removes no permits except exact duplicates and rows without a permit number.</p>
+</section>
+<section id="geocode" class="level3">
+<h3 class="anchored" data-anchor-id="geocode">Geocode</h3>
+<p>Permits with municipal coordinates keep them. The 254 permits without coordinates go through a filter. The pipeline geocodes only addresses with a street name and a number. It skips kilometre markers and placeholders. In version 3, 131 permits qualified and 123 did not. The 131 addresses went to the ArcGIS service. A local cache stores each answer with its match score and match type, so reruns cost nothing.</p>
+<p>The located permits total 26,886. The pipeline warns about any point outside São Paulo and about any match coarser than street level.</p>
+</section>
+<section id="group-and-summarize" class="level3">
+<h3 class="anchored" data-anchor-id="group-and-summarize">Group and summarize</h3>
+<p>Grouping decides which permits belong to the same development. Two permits match when they share a land registry number, share a land area, and sit within 100 metres. The combination sets the match type. Type 1 means all three agree. Types 2 to 4 mean two agree. Type 5 means only the registry number agrees. Partial matches upgrade to type 1 when the building area or the unit count also agrees.</p>
+<p>Each permit joins one development. Perfect matches take priority, then partial matches from type 2 down, then registry-only groups. Permits in no group stand alone. Lots split into sub-lots get a separate treatment: the pipeline summarizes each sub-lot first, then adds the sub-lots up. <a href="#sec-examples" class="quarto-xref">Section&nbsp;4</a> traces four cases through this machinery.</p>
+<p>The published file keeps only developments with both approval and execution permits and more than five units. It holds 11,735 developments in EPSG:31983 GeoParquet format.</p>
+</section>
+</section>
+<section id="sec-examples" class="level2">
+<h2 class="anchored" data-anchor-id="sec-examples">Worked examples</h2>
+<p>The cells below read the version 3 snapshots. Expand any cell to see the code.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>clean_permits <span class="ot">&lt;-</span> arrow<span class="sc">::</span><span class="fu">read_parquet</span>(<span class="st">"../data/benchmark/alvaras_pde.parquet"</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>geo_permits <span class="ot">&lt;-</span> sfarrow<span class="sc">::</span><span class="fu">st_read_parquet</span>(<span class="st">"../data/benchmark/geo_alvaras_pde.parquet"</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>developments <span class="ot">&lt;-</span> sfarrow<span class="sc">::</span><span class="fu">st_read_parquet</span>(<span class="st">"../data/benchmark/geo_alvaras_emp_pde.parquet"</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>funnel <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">stage =</span> <span class="fu">c</span>(<span class="st">"Cleaned"</span>, <span class="st">"Located"</span>, <span class="st">"Developments"</span>),</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">rows =</span> <span class="fu">c</span>(<span class="fu">nrow</span>(clean_permits), <span class="fu">nrow</span>(geo_permits), <span class="fu">nrow</span>(developments))</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(funnel)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div id="tbl-funnel" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-funnel-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: Permits surviving each stage in the version 3 run.
+</figcaption>
+<div aria-describedby="tbl-funnel-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<table class="cell caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">stage</th>
+<th style="text-align: right;">rows</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Cleaned</td>
+<td style="text-align: right;">27009</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Located</td>
+<td style="text-align: right;">26886</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Developments</td>
+<td style="text-align: right;">11735</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</figure>
+</div>
+</div>
+<section id="a-perfect-match" class="level3">
+<h3 class="anchored" data-anchor-id="a-perfect-match">A perfect match</h3>
+<p>Development 3371 joins two permits on Rua Heitor Penteado. Both carry land registry number 08134103979 and land area 1,815 m². They sit at the same address, well within 100 metres. All three signals agree, so the pair earns match type 1.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>permits_3371 <span class="ot">&lt;-</span> geo_permits[geo_permits<span class="sc">$</span>sql_incra <span class="sc">==</span> <span class="st">"08134103979"</span>, ]</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>permits_3371_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>(permits_3371))</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(permits_3371_df[, <span class="fu">c</span>(<span class="st">"alvara"</span>, <span class="st">"data_aprovacao"</span>, <span class="st">"descricao_tipo"</span>, <span class="st">"area_do_terreno"</span>, <span class="st">"endereco"</span>)])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div id="tbl-perfect" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-perfect-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: The two permits behind development 3371.
+</figcaption>
+<div aria-describedby="tbl-perfect-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<table class="cell caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 5%">
+<col style="width: 15%">
+<col style="width: 15%">
+<col style="width: 22%">
+<col style="width: 16%">
+<col style="width: 24%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: left;">alvara</th>
+<th style="text-align: left;">data_aprovacao</th>
+<th style="text-align: left;">descricao_tipo</th>
+<th style="text-align: right;">area_do_terreno</th>
+<th style="text-align: left;">endereco</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">1</td>
+<td style="text-align: left;">2010.02.575-00</td>
+<td style="text-align: left;">2010-01-05</td>
+<td style="text-align: left;">APROVACAO E EXECUCAO</td>
+<td style="text-align: right;">1815.26</td>
+<td style="text-align: left;">R HEITOR PENTEADO 1645</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2055</td>
+<td style="text-align: left;">2010.02.575-01</td>
+<td style="text-align: left;">2011-08-08</td>
+<td style="text-align: left;">APROVACAO E EXECUCAO</td>
+<td style="text-align: right;">1815.26</td>
+<td style="text-align: left;">HEITOR PENTEADO 1645</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</figure>
+</div>
+</div>
+<p>The map below shows the two permit points and the development point. The development takes the most recent permit’s location.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>dev_3371 <span class="ot">&lt;-</span> developments[developments<span class="sc">$</span>id_empreendimento_num <span class="sc">==</span> <span class="dv">3371</span>, ]</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(sf<span class="sc">::</span><span class="fu">st_geometry</span>(permits_3371), <span class="at">pch =</span> <span class="dv">16</span>, <span class="at">col =</span> <span class="st">"grey40"</span>, <span class="at">main =</span> <span class="st">"Development 3371"</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(sf<span class="sc">::</span><span class="fu">st_geometry</span>(dev_3371), <span class="at">pch =</span> <span class="dv">17</span>, <span class="at">col =</span> <span class="st">"black"</span>, <span class="at">add =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<div id="fig-perfect-map" class="quarto-float quarto-figure quarto-figure-center anchored" alt="Map with three overlapping points at one address in São Paulo, one for each of two permits and one for the development.">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-perfect-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="pipeline-walkthrough_files/figure-html/fig-perfect-map-1.png" class="img-fluid figure-img" alt="Map with three overlapping points at one address in São Paulo, one for each of two permits and one for the development." width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-perfect-map-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2: Development 3371. Two permit points and the development point at Rua Heitor Penteado 1645.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="a-parcelamento" class="level3">
+<h3 class="anchored" data-anchor-id="a-parcelamento">A parcelamento</h3>
+<p>Development 5721 covers 34 permits on one lot at Rua 04 4, more permits than any other parcelamento in the file. The lot contains sub-lots with different land areas. The pipeline summarizes each sub-lot separately, then adds areas, blocks, and units across sub-lots. The result spans 161,478 m² with 6,211 units.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>permits_5721 <span class="ot">&lt;-</span> geo_permits[geo_permits<span class="sc">$</span>sql_incra <span class="sc">==</span> developments<span class="sc">$</span>sql_incra[developments<span class="sc">$</span>id_empreendimento_num <span class="sc">==</span> <span class="dv">5721</span>], ]</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>permits_5721 <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>(permits_5721))</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>sublots <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">table</span>(permits_5721<span class="sc">$</span>area_do_terreno))</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(sublots) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"land_area"</span>, <span class="st">"permits"</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(utils<span class="sc">::</span><span class="fu">head</span>(sublots[<span class="fu">order</span>(<span class="sc">-</span>sublots<span class="sc">$</span>permits), ], <span class="dv">10</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div id="tbl-parcelamento" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-parcelamento-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;3: Sub-lots of development 5721. Each land area forms one sub-lot.
+</figcaption>
+<div aria-describedby="tbl-parcelamento-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<table class="cell caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: left;">land_area</th>
+<th style="text-align: right;">permits</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">11</td>
+<td style="text-align: left;">9698.4</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">15</td>
+<td style="text-align: left;">15328.81</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">1</td>
+<td style="text-align: left;">3049.45</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">2</td>
+<td style="text-align: left;">4770.57</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">4</td>
+<td style="text-align: left;">5697.21</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">5</td>
+<td style="text-align: left;">6804.71</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">6</td>
+<td style="text-align: left;">7472.97</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">7</td>
+<td style="text-align: left;">7705.41</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">8</td>
+<td style="text-align: left;">8915.62</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">9</td>
+<td style="text-align: left;">8990.74</td>
+<td style="text-align: right;">2</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</figure>
+</div>
+</div>
+</section>
+<section id="a-geocoded-address" class="level3">
+<h3 class="anchored" data-anchor-id="a-geocoded-address">A geocoded address</h3>
+<p>The municipality supplied no coordinates for 254 permits. The cache holds 67 distinct addresses covering the 131 permits that qualified. Most answers land on an address point or street segment. Five answers land coarser, on a street or town centroid. The table below lists them. The pipeline keeps them but warns.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>cache <span class="ot">&lt;-</span> arrow<span class="sc">::</span><span class="fu">read_parquet</span>(<span class="st">"../data/processed/geocoding-cache.parquet"</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>cache <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(cache)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>coarse <span class="ot">&lt;-</span> cache[cache<span class="sc">$</span>geocode_tipo <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"StreetName"</span>, <span class="st">"Locality"</span>), ]</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>coarse <span class="ot">&lt;-</span> coarse[<span class="fu">order</span>(coarse<span class="sc">$</span>geocode_score), ]</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(coarse[, <span class="fu">c</span>(<span class="st">"endereco_key"</span>, <span class="st">"geocode_tipo"</span>, <span class="st">"geocode_score"</span>)])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div id="tbl-geocode" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-geocode-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;4: Coarse ArcGIS matches kept by the pipeline with a warning.
+</figcaption>
+<div aria-describedby="tbl-geocode-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<table class="cell caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 3%">
+<col style="width: 62%">
+<col style="width: 16%">
+<col style="width: 17%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: left;">endereco_key</th>
+<th style="text-align: left;">geocode_tipo</th>
+<th style="text-align: right;">geocode_score</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">45</td>
+<td style="text-align: left;">ES DO EMBU-GUACU 10604 SAO PAULO SP</td>
+<td style="text-align: left;">Locality</td>
+<td style="text-align: right;">84.51</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">27</td>
+<td style="text-align: left;">ES ECOTURISTICA DE PARELHEIROS 6060 SAO PAULO SP</td>
+<td style="text-align: left;">StreetName</td>
+<td style="text-align: right;">89.50</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">29</td>
+<td style="text-align: left;">ES ECOTURISTICA DE PARELHEIROS 6170 SAO PAULO SP</td>
+<td style="text-align: left;">StreetName</td>
+<td style="text-align: right;">89.50</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">10</td>
+<td style="text-align: left;">DO CONTORNO 60 SAO PAULO SP</td>
+<td style="text-align: left;">StreetName</td>
+<td style="text-align: right;">96.86</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">17</td>
+<td style="text-align: left;">R DR JOSE LEAL MASCARENHAS 100 SAO PAULO SP</td>
+<td style="text-align: left;">StreetName</td>
+<td style="text-align: right;">97.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</figure>
+</div>
+</div>
+</section>
+<section id="a-permit-left-out" class="level3">
+<h3 class="anchored" data-anchor-id="a-permit-left-out">A permit left out</h3>
+<p>Permit 2010.28.961-00 approves and executes a new building at Rua Malmequer do Campo 1155 on a 20,793 m² lot. Its land registry field is empty. The matcher treats all 102 permits without a registry number as sharing one lot, and a later join drops them from the developments. The permit survives cleaning and locating but never reaches the published file.</p>
+</section>
+</section>
+<section id="sec-replication" class="level2">
+<h2 class="anchored" data-anchor-id="sec-replication">Replication check</h2>
+<p>Regression tests rebuild version 3 from its inputs and compare column by column. The full test suite passes with 30 successes and no failures.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>fresh <span class="ot">&lt;-</span> sfarrow<span class="sc">::</span><span class="fu">st_read_parquet</span>(<span class="st">"../outputs/alvaras.parquet"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>checks <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">check =</span> <span class="fu">c</span>(</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Cleaning reproduces the cleaned snapshot"</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Matching reproduces the final snapshot"</span>,</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Fresh run totals match version 3"</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Fresh run coordinate system matches"</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">outcome =</span> <span class="fu">c</span>(</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Exact"</span>,</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Exact"</span>,</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">paste0</span>(<span class="fu">nrow</span>(fresh), <span class="st">" developments, "</span>, <span class="fu">sum</span>(fresh<span class="sc">$</span>n_unidades, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="st">" units"</span>),</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">paste0</span>(<span class="st">"EPSG:"</span>, sf<span class="sc">::</span><span class="fu">st_crs</span>(fresh)<span class="sc">$</span>epsg)</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(checks)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div id="tbl-replication" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-replication-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;5: Replication checks and their outcomes.
+</figcaption>
+<div aria-describedby="tbl-replication-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<table class="cell caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 55%">
+<col style="width: 44%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">check</th>
+<th style="text-align: left;">outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Cleaning reproduces the cleaned snapshot</td>
+<td style="text-align: left;">Exact</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Matching reproduces the final snapshot</td>
+<td style="text-align: left;">Exact</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Fresh run totals match version 3</td>
+<td style="text-align: left;">11735 developments, 914401 units</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Fresh run coordinate system matches</td>
+<td style="text-align: left;">EPSG:31983</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</figure>
+</div>
+</div>
+<p>The fresh run differs from the snapshot in exactly one development’s match type. ArcGIS placed one address slightly differently than in version 3, and the 100-metre rule flipped that pair. Totals, units, and the coordinate system match.</p>
+</section>
+<section id="questions-for-the-dataset-authors" class="level2">
+<h2 class="anchored" data-anchor-id="questions-for-the-dataset-authors">Questions for the dataset authors</h2>
+<p>The pipeline keeps six version 3 rules unchanged so the output reproduces the published file. Each rule below needs an author decision before the next release changes it.</p>
+<ol type="1">
+<li><strong>Permits dropped by the parcelamento join.</strong> The script overwrites a permit flag with a lot-level flag, then joins on every shared column. Permits whose flag changed find no match and fall out. In version 3 this removes 32 approval and execution permits across 17 lots that also hold a plano integrado permit. Should those permits stay in their developments?</li>
+<li><strong>Permits without a land registry number.</strong> The matcher treats all 102 as sharing one lot, and the same join drops them. Should they match by location only, or should the pipeline exclude them explicitly?</li>
+<li><strong>Correction filter in the plano integrado count.</strong> The correction filter sits outside the selector, so the count ignores it. This changes nothing in version 3. Should the filter apply?</li>
+<li><strong>Choice among partial matches.</strong> The comment says a permit in several partial groups joins the one with more units. The code compares the permit’s own units across groups, which always tie, so the permit joins the lowest partial type. Which rule do the authors want?</li>
+<li><strong>Sub-lot order in parcelamentos.</strong> Sub-lots sort by land area, so dates, registry numbers, and addresses come from the smallest sub-lot rather than the most recent permit. Should the most recent permit win instead?</li>
+<li><strong>Geocoding policy.</strong> The pipeline drops 123 permits without usable addresses and keeps 10 matches placed at a street or town centroid, one outside São Paulo. Should centroid matches stay or go? Storing free-service results may also breach the provider’s terms, so publishing coordinates may need an API key.</li>
+</ol>
+</section>
+<section id="reproduce-it-yourself" class="level2">
+<h2 class="anchored" data-anchor-id="reproduce-it-yourself">Reproduce it yourself</h2>
+<p>Two commands rebuild the dataset. Rendering this document needs the benchmark files in <code>data/benchmark</code>, which the repository excludes from Git.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">R</span> <span class="at">-e</span> <span class="st">"renv::restore()"</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">R</span> <span class="at">-e</span> <span class="st">"targets::tar_make()"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>The pipeline definition lives in <code>_targets.R</code>. Its functions live in <code>R/</code>. Tests live in <code>tests/testthat</code>, with regression tests that need the local benchmarks. Reference geography sits in <code>data/reference</code>. Raw downloads, intermediate data, the geocoding cache, and generated outputs stay out of Git.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
