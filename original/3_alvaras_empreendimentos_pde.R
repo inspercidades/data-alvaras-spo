@@ -396,10 +396,10 @@ amostra_emp <- amostra_parcelamento %>%
       ind_edificacao_nova == TRUE & (ind_aprovacao == TRUE | 
                                        ind_execucao == TRUE))])),
     n_unidades_r2h_r2v_por_bloco = n_unidades_r2h_r2v/n_blocos,
-    sql_incra = first(sql_incra),
-    sql_incra_composto = first(sql_incra_composto),
     sql_incra_lista = map_chr(list(unique(na.omit(sql_incra))), 
                               ~ paste0(.x, collapse = "; ")),
+    sql_incra = first(sql_incra),
+    sql_incra_composto = first(sql_incra_composto),
     n_enderecos = n_distinct(endereco),
     endereco = first(na.omit(endereco)),
     endereco_lista= map_chr(list(unique(na.omit(endereco_raw))), 
@@ -495,10 +495,10 @@ atts_ind_parcelamento <- amostra_parcelamento %>%
     n_unidades_r2h_r2v = first(na.omit(unid_r2h_r2v[which(
       ind_edificacao_nova == TRUE & (ind_aprovacao == TRUE | 
                                        ind_execucao == TRUE))])),
-    sql_incra = first(sql_incra),
-    sql_incra_composto = first(sql_incra_composto),
     sql_incra_lista = map_chr(list(unique(na.omit(sql_incra))), 
                               ~ paste0(.x, collapse = "; ")),
+    sql_incra = first(sql_incra),
+    sql_incra_composto = first(sql_incra_composto),
     n_enderecos = n_distinct(endereco),
     endereco = first(na.omit(endereco)),
     endereco_lista= map_chr(list(unique(na.omit(endereco_raw))), 
@@ -561,10 +561,10 @@ atts_ind_parcelamento <- amostra_parcelamento %>%
     n_unidades_hmp_por_bloco = n_unidades_hmp/n_blocos,
     n_unidades_r2h_r2v = sum(n_unidades_r2h_r2v),
     n_unidades_r2h_r2v_por_bloco = n_unidades_r2h_r2v/n_blocos,
-    sql_incra = first(sql_incra),
-    sql_incra_composto = first(sql_incra_composto),
     sql_incra_lista = map_chr(list(unique(na.omit(sql_incra))), 
                               ~ paste0(.x, collapse = "; ")),
+    sql_incra = first(sql_incra),
+    sql_incra_composto = first(sql_incra_composto),
     n_enderecos = sum(n_enderecos),
     endereco = first(na.omit(endereco)),
     endereco_lista= map_chr(list(unique(na.omit(endereco))), 
@@ -634,7 +634,7 @@ amostra_por_emp <- amostra_por_emp %>%
 
 amostra_por_emp <- amostra_por_emp %>%
   st_sf(amostra_por_emp$geometry, crs = 31983) %>%
-  subset(select = -c(geometry, sql_incra_composto, sql_incra_lista)) %>% 
+  subset(select = -c(geometry, sql_incra_composto)) %>% 
   rename(geometry = amostra_por_emp.geometry) %>%
   filter(!(n_unidades <= 5) | is.na(n_unidades))
 

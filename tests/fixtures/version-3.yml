@@ -11,7 +11,7 @@ geocoded:
   units_sum: 1991008
 final:
   rows: 11735
-  columns: 48
+  columns: 49
   unique_development_ids: 11734
   epsg: 31983
   units_sum: 914401

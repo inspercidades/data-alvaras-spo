@@ -53,7 +53,7 @@ identify_developments <- function(geo_alvaras, dist_max = 100) {
   developments <- mutate(developments, geometry = points[ponto])
   developments <- select(
     developments,
-    -c(ponto, sql_incra_composto, sql_incra_lista)
+    -c(ponto, sql_incra_composto)
   )
   developments <- sf::st_sf(developments, sf_column_name = "geometry")
   return(developments)
@@ -346,9 +346,12 @@ summarise_permits <- function(grouped_permits, ...) {
     n_unidades_hmp_por_bloco = n_unidades_hmp / n_blocos,
     n_unidades_r2h_r2v = first_valid(unid_r2h_r2v, fonte_unidades),
     n_unidades_r2h_r2v_por_bloco = n_unidades_r2h_r2v / n_blocos,
+    # The list must come before `sql_incra` is overwritten by its first value.
+    # Questão para os autores: `unique()` compares raw strings, so SQLs inside
+    # comma-separated values can repeat in the list.
+    sql_incra_lista = collapse_unique(sql_incra),
     sql_incra = first(sql_incra),
     sql_incra_composto = first(sql_incra_composto),
-    sql_incra_lista = collapse_unique(sql_incra),
     n_enderecos = n_distinct(endereco),
     endereco = first_valid(endereco),
     endereco_lista = collapse_unique(endereco_raw),
@@ -427,8 +430,8 @@ combine_sub_lots <- function(sub_lots) {
     n_unidades_his_por_bloco = n_unidades_his / n_blocos,
     n_unidades_hmp_por_bloco = n_unidades_hmp / n_blocos,
     n_unidades_r2h_r2v_por_bloco = n_unidades_r2h_r2v / n_blocos,
-    sql_incra = first(sql_incra),
     sql_incra_lista = collapse_unique(sql_incra),
+    sql_incra = first(sql_incra),
     n_enderecos = sum(n_enderecos),
     endereco = first_valid(endereco),
     endereco_lista = collapse_unique(endereco),
