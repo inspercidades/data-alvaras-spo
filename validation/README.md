@@ -10,9 +10,10 @@ snapshots.
 | Developments | `geo_alvaras_pde.parquet` (26,886 permits) | `geo_alvaras_emp_pde.parquet` | 11,735 |
 
 Both tests compare every column; the development test also compares every
-point. The final snapshot matches the version 3 file in Dataverse. The
-benchmark files are excluded from Git; the tests read them from
-`data/benchmark/` and skip when they are missing.
+point. The final snapshot is the authors' revision of 2 December 2025. It adds
+`sql_incra_lista` to the version 3 file in Dataverse and leaves the other 48
+columns unchanged. The benchmark files are excluded from Git; the tests read
+them from `data/benchmark/` and skip when they are missing.
 
 A full run with fresh ArcGIS results also yields 11,735 developments and
 914,401 units. One development changes match type because ArcGIS now places
@@ -62,3 +63,9 @@ next release.
    10 of the 131 geocoded permits were placed at a street or town centroid,
    one of them outside São Paulo. Should such matches be dropped? Esri's terms may also restrict storing results from the free
    geocoding service; publishing coordinates may require an API key.
+7. **Repeated SQLs in `sql_incra_lista`.** The list removes duplicates from
+   the raw `sql_incra` strings. A plano integrado that lists several lots in
+   one comma-separated string therefore repeats SQLs already listed by other
+   permits, as in `12601300115; 12601300115,12601300107`. In the revision of
+   2 December 2025, 433 of the 976 developments with more than one entry
+   repeat an SQL.

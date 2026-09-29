@@ -15,3 +15,7 @@
   warning for coarse matches.
 - Listed version 3 rules to review with the dataset authors in
   `validation/README.md`.
+- Updated `original/` to the authors' revision of 2 December 2025, which keeps
+  `sql_incra_lista` in the final output.
+- Fixed `sql_incra_lista`, which held only the first SQL because it was
+  computed after `sql_incra` was reduced to its first value.
